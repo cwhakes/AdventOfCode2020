@@ -16,7 +16,7 @@ fn main() {
 
     let mut product = 1;
     for (right, down) in &TOBAGGANS {
-        let forest = buf.lines().map(|s| Row::from_bytes(str::trim(s)));
+        let forest = buf.lines().map(Row::from_bytes);
         let answer = count_trees(*right, *down, forest);
         product *= answer;
     }
@@ -48,7 +48,7 @@ impl<'a> Row<'a> {
 fn count_trees<'a>(right: usize, down: usize, forest: impl Iterator<Item = Row<'a>>) -> usize {
     let mut count = 0;
     let mut column = 0;
-    for (_, row) in forest.into_iter().enumerate().filter(|(i, _)| 0 == i % down) {
+    for row in forest.into_iter().step_by(down) {
         if row.has_tree_at(column) {
             count += 1;
         }
@@ -76,7 +76,7 @@ const INPUT: &'static str = "\
 
     #[test]
     fn example() {
-        let forest = INPUT.lines().map(|s| Row::from_bytes(str::trim(s)));
+        let forest = INPUT.lines().map(Row::from_bytes);
         let answer = count_trees(3, 1, forest);
         assert_eq!(7, answer);
     }
@@ -86,7 +86,7 @@ const INPUT: &'static str = "\
 
         let mut product = 1;
         for (right, down) in &TOBAGGANS {
-            let forest = INPUT.lines().map(|s| Row::from_bytes(str::trim(s)));
+            let forest = INPUT.lines().map(Row::from_bytes);
             let answer = count_trees(*right, *down, forest);
             product *= answer;
         }
