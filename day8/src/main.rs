@@ -30,8 +30,7 @@ fn get_answer2(code: &mut [Instruction]) -> i16 {
     for changed_index in 0..code.len() {
         code[changed_index].flip();
 
-        machine.run(code);
-        if machine.terminates {break;}
+        if machine.run(code).terminates() {break;}
         machine.reset();
 
         code[changed_index].flip();
@@ -71,7 +70,6 @@ impl Instruction {
 struct Machine {
     index: i16,
     accumulator: i16,
-    terminates: bool,
 }
 
 impl Machine {
@@ -89,22 +87,34 @@ impl Machine {
         self.index += 1;
     }
 
-    fn run(&mut self, instructions: &[Instruction]) {
+    fn run(&mut self, instructions: &[Instruction]) -> ExitCode {
         let mut visited = vec![false; instructions.len()];
 
         while self.index() < instructions.len() {
-            if visited[self.index()] {return;}
+            if visited[self.index()] {return ExitCode::EndlessLoop;}
 
             visited[self.index()] = true;
 
             self.execute(instructions[self.index()]);
         }
 
-        self.terminates = true;
+        ExitCode::Terminates
     }
 
     fn reset(&mut self) {
         *self = Machine::default();
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ExitCode {
+    Terminates,
+    EndlessLoop
+}
+
+impl ExitCode {
+    fn terminates(self) -> bool {
+        ExitCode::Terminates == self
     }
 }
 
