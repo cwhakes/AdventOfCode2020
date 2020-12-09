@@ -73,9 +73,20 @@ struct Machine {
 }
 
 impl Machine {
-    fn index(&self) -> usize {
-        assert!(0 <= self.index);
-        self.index as usize
+    fn get_instruction(&self, code:&[Instruction]) -> Result<(usize, Instruction), ExitCode> {
+        if self.index < 0 {
+            return Err(ExitCode::OutOfBounds(self.index));
+        }
+        let index = self.index as usize;
+
+        if index < code.len() {
+            Ok((index, code[index]))
+        } else if index == code.len() {
+            Err(ExitCode::Terminates)
+        } else {
+            Err(ExitCode::OutOfBounds(self.index))
+        }
+
     }
 
     fn execute(&mut self, instruction: Instruction) {
@@ -87,18 +98,20 @@ impl Machine {
         self.index += 1;
     }
 
-    fn run(&mut self, instructions: &[Instruction]) -> ExitCode {
-        let mut visited = vec![false; instructions.len()];
+    fn run(&mut self, code: &[Instruction]) -> ExitCode {
+        let mut visited = vec![false; code.len()];
 
-        while self.index() < instructions.len() {
-            if visited[self.index()] {return ExitCode::EndlessLoop;}
-
-            visited[self.index()] = true;
-
-            self.execute(instructions[self.index()]);
+        loop {
+            match self.get_instruction(code) {
+                Ok((index, instruction)) => {
+                    if visited[index] {return ExitCode::EndlessLoop;}
+                    visited[index] = true;
+        
+                    self.execute(instruction);
+                },
+                Err(code) => break code,
+            };
         }
-
-        ExitCode::Terminates
     }
 
     fn reset(&mut self) {
@@ -109,7 +122,8 @@ impl Machine {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ExitCode {
     Terminates,
-    EndlessLoop
+    EndlessLoop,
+    OutOfBounds(i16),
 }
 
 impl ExitCode {
