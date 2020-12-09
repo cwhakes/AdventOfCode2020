@@ -7,16 +7,37 @@ fn main() {
     file.read_to_string(&mut buf).unwrap();
 
     let mut code = process_input(&buf);
-    let answer = code.get_answer();
-    let answer2 = code.get_answer2();
+    
+    let answer = get_answer(&*code);
+    let answer2 = get_answer2(&mut *code);
 
     println!("{}\n{}", answer, answer2);
 }
 
-fn process_input(input: &str) -> Code {
-    Code {
-        instructions: input.lines().map(Instruction::from_str).collect()
+fn process_input(input: &str) -> Vec<Instruction> {
+    input.lines().map(Instruction::from_str).collect()
+}
+
+fn get_answer(code: &[Instruction]) -> i16 {
+    let mut machine = Machine::default();
+    machine.run(code);
+    machine.accumulator
+}
+
+fn get_answer2(code: &mut [Instruction]) -> i16 {
+    let mut machine = Machine::default();
+
+    for changed_index in 0..code.len() {
+        code[changed_index].flip();
+
+        machine.run(code);
+        if machine.terminates {break;}
+        machine.reset();
+
+        code[changed_index].flip();
     }
+
+    machine.accumulator
 }
 
 #[derive(Copy, Clone)]
@@ -46,57 +67,44 @@ impl Instruction {
     }
 }
 
-struct Code {
-    instructions: Vec<Instruction>,
+#[derive(Default)]
+struct Machine {
+    index: i16,
+    accumulator: i16,
+    terminates: bool,
 }
 
-impl Code {
-    fn get_answer(&self) -> i16 {
-        let mut accumulator = 0;
-        let mut index = 0;
-        let mut visited = vec![false; self.instructions.len()];
-
-        while (index as usize) < self.instructions.len() {
-            if visited[index as usize] {break;}
-
-            visited[index as usize] = true;
-
-            match self.instructions[index as usize] {
-                Instruction::Acc(num) => {accumulator += num; index += 1;},
-                Instruction::Jmp(num) => {index += num},
-                Instruction::Nop(_) => {index += 1;}
-            }
-        }
-
-        accumulator
+impl Machine {
+    fn index(&self) -> usize {
+        assert!(0 <= self.index);
+        self.index as usize
     }
 
-    fn terminates(&self) -> bool {
-        let mut index = 0;
-        let mut visited = vec![false; self.instructions.len()];
-
-        while (index as usize) < self.instructions.len() {
-            if visited[index as usize] {return false;}
-
-            visited[index as usize] = true;
-
-            match self.instructions[index as usize] {
-                Instruction::Acc(_) => {index += 1;},
-                Instruction::Jmp(num) => {index += num},
-                Instruction::Nop(_) => {index += 1;}
-            }
+    fn execute(&mut self, instruction: Instruction) {
+        match instruction {
+            Instruction::Acc(num) => {self.accumulator += num},
+            Instruction::Jmp(num) => {self.index += num - 1},
+            Instruction::Nop(_) => {}
         }
-
-        true
+        self.index += 1;
     }
 
-    fn get_answer2(&mut self) -> i16 {
-        for changed_index in 0..self.instructions.len() {
-            self.instructions[changed_index].flip();
-            if self.terminates() { break; };
-            self.instructions[changed_index].flip();
+    fn run(&mut self, instructions: &[Instruction]) {
+        let mut visited = vec![false; instructions.len()];
+
+        while self.index() < instructions.len() {
+            if visited[self.index()] {return;}
+
+            visited[self.index()] = true;
+
+            self.execute(instructions[self.index()]);
         }
-        self.get_answer()
+
+        self.terminates = true;
+    }
+
+    fn reset(&mut self) {
+        *self = Machine::default();
     }
 }
 
@@ -119,6 +127,6 @@ acc +6";
     fn test_answer() {
         let code = process_input(INPUT);
 
-        assert_eq!(5, code.get_answer())
+        assert_eq!(5, get_answer(&*code));
     }
 }
