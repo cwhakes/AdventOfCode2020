@@ -38,7 +38,7 @@ fn get_answer2(expressions: &[Expression]) -> i64 {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct Expression(Vec<Operation>);
+struct Expression(Vec<Token>);
 
 impl Expression {
     fn from_str(s: &str) -> Self {
@@ -50,20 +50,12 @@ impl Expression {
         let mut total = 0;
         let mut operator = Operator::Add;
         for token in self.0.iter() {
-            match token {
-                Operation::Number(num) => {
-                    match operator {
-                        Operator::Add => total += num,
-                        Operator::Multiply => total *= num,
-                    }
-                },
-                Operation::Operator(op) => operator = op.clone(),
-                Operation::Parenthetical(e) => {
-                    let num = e.evaluate();
-                    match operator {
-                        Operator::Add => total += num,
-                        Operator::Multiply => total *= num,
-                    }
+            if let Token::Operator(op) = token {
+                operator = op.clone();
+            } else if let Some(num) = token.evaluate(Expression::evaluate) {
+                match operator {
+                    Operator::Add => total += num,
+                    Operator::Multiply => total *= num,
                 }
             }
         }
@@ -71,41 +63,39 @@ impl Expression {
     }
 
     fn evaluate2(&self) -> i64 {
-        self.0.split(|o| *o == Operation::Operator(Operator::Multiply))
-            .map(Expression::evaluate2_inner)
-            .product()
-    }
-
-    fn evaluate2_inner(ops: &[Operation]) -> i64 {
-        let mut total = 0;
-        let mut operator = Operator::Add;
-        for token in ops.iter() {
-            match token {
-                Operation::Number(num) => {
-                    match operator {
-                        Operator::Add => total += num,
-                        Operator::Multiply => total *= num,
-                    }
-                },
-                Operation::Operator(op) => operator = op.clone(),
-                Operation::Parenthetical(e) => {
-                    let num = e.evaluate2();
+        self.0.split(|o| *o == Token::Operator(Operator::Multiply)).map(|ops| {
+            let mut total = 0;
+            let mut operator = Operator::Add;
+            for token in ops.iter() {
+                if let Token::Operator(op) = token {
+                    operator = op.clone();
+                } else if let Some(num) = token.evaluate(Expression::evaluate2) {
                     match operator {
                         Operator::Add => total += num,
                         Operator::Multiply => total *= num,
                     }
                 }
             }
-        }
-        total
+            total
+        }).product()
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum Operation {
+enum Token {
     Number(i64),
     Operator(Operator),
     Parenthetical(Expression)
+}
+
+impl Token {
+    fn evaluate<F: FnOnce(&Expression) -> i64>(&self, evaluator: F) -> Option<i64> {
+        match self {
+            Token::Number(num) => Some(*num),
+            Token::Parenthetical(exp) => Some(evaluator(exp)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -114,24 +104,24 @@ enum Operator {
     Multiply,
 }
 
-fn parse_number(i: &str) -> IResult<&str, Operation, Error<&str>> {
+fn parse_number(i: &str) -> IResult<&str, Token, Error<&str>> {
     map(
         digit1,
-        |s: &str| Operation::Number(s.parse::<i64>().unwrap_or(-1))
+        |s: &str| Token::Number(s.parse::<i64>().unwrap_or(-1))
     )(i)
 }
 
-fn parse_operator(i: &str) -> IResult<&str, Operation, Error<&str>> {
+fn parse_operator(i: &str) -> IResult<&str, Token, Error<&str>> {
     let add = value(Operator::Add, tag("+"));
     let multiply = value(Operator::Multiply, tag("*"));
 
     map(
         alt((add, multiply)),
-        |o| Operation::Operator(o),
+        |o| Token::Operator(o),
     )(i)
 }
 
-fn parse_parenthetical(i: &str) -> IResult<&str, Operation, Error<&str>> {
+fn parse_parenthetical(i: &str) -> IResult<&str, Token, Error<&str>> {
     map(
         preceded(
             char('('),
@@ -142,11 +132,11 @@ fn parse_parenthetical(i: &str) -> IResult<&str, Operation, Error<&str>> {
                 )
             )
         ),
-        |e| Operation::Parenthetical(e)
+        |e| Token::Parenthetical(e)
     )(i)
 }
 
-fn parse_operation(i: &str) -> IResult<&str, Operation, Error<&str>> {
+fn parse_operation(i: &str) -> IResult<&str, Token, Error<&str>> {
     preceded(
         multispace0,
         alt((
