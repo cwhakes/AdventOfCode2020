@@ -57,9 +57,9 @@ fn get_answer2(rules: &RuleSet, messages: &[&str]) -> usize {
 }
 
 #[derive(Clone)]
-struct RuleSet(HashMap<usize, Rule>);
+struct RuleSet<'a>(HashMap<usize, Rule<'a>>);
 
-impl RuleSet {
+impl<'a> RuleSet<'a> {
     fn validate(&self, rule_index: usize, message: &str) -> bool {
         let rule_to_validate = self.0.get(&rule_index).unwrap();
         let remainders = rule_to_validate.validate(message, self);
@@ -68,13 +68,13 @@ impl RuleSet {
 }
 
 #[derive(Clone, Debug)]
-enum Rule {
-    Terminator(String),
+enum Rule<'a> {
+    Terminator(&'a str),
     Reference(HashSet<Vec<usize>>),
 }
 
-impl Rule {
-    fn from_str(input: &str) -> (usize, Self) {
+impl<'a> Rule<'a> {
+    fn from_str(input: &'a str) -> (usize, Self) {
         let mut iter = input.split(": ");
         let index = iter.next().unwrap().parse().unwrap();
         
@@ -82,7 +82,7 @@ impl Rule {
         if text.starts_with("\"") {
             let (_head, tail) = text.split_at(1);
             let (body, _tail) = tail.split_at(tail.len()-1);
-            (index, Rule::Terminator(body.to_string()))
+            (index, Rule::Terminator(body))
         } else {
             let h = text.split(" | ").map(|s| s.split(" ").map(|s| s.parse().unwrap()).collect()).collect();
             (index, Rule::Reference(h))
