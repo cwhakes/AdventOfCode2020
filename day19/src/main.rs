@@ -89,31 +89,28 @@ impl Rule {
         }
     }
 
-    fn validate<'s, 'r>(&'r self, message: &'s str, rules: &'r RuleSet) -> HashSet<&'s str> {
-        if message.is_empty() { return HashSet::new() }
+    fn validate<'s, 'r: 's>(&'r self, message: &'s str, rules: &'r RuleSet) -> Box<dyn Iterator<Item=&'s str> + 's> {
+        if message.is_empty() { return Box::new(None.into_iter()) }
 
         match self {
             Rule::Terminator(s) => {
                 if message.starts_with(s) {
                     let (_matched, unmatched) = message.split_at(s.len());
-                    let mut hashset = HashSet::new();
-                    hashset.insert(unmatched);
-                    hashset
+                    Box::new(Some(unmatched).into_iter())
                 } else {
-                    HashSet::new()
+                    Box::new(None.into_iter())
                 }
             }
             Rule::Reference(branches) => {
-                branches.iter().map(|sequence| {
-                    let mut remaining_message = HashSet::new();
-                    remaining_message.insert(message);
+                Box::new(branches.iter().flat_map(move |sequence| {
+                    let mut remaining_message = vec![message];
                     for rule in sequence.iter().map(|index| rules.0.get(index).unwrap()) {
                         remaining_message = remaining_message.iter().flat_map(|mess|
-                            rule.validate(mess, rules).into_iter()
+                            rule.validate(mess, rules)
                         ).collect()
                     }
-                    remaining_message
-                }).flat_map(|h| h.into_iter()).collect()
+                    remaining_message.into_iter()
+                }))
             }
         }
     }
@@ -149,9 +146,8 @@ aaaabbb";
     fn test_terminator() {
         let (_, rule) = dbg!(Rule::from_str("0: \"a\""));
         let rules = RuleSet(HashMap::new());
-        let matches = rule.validate("a", &rules);
-        assert_eq!(1, matches.len());
-        assert_eq!("", *matches.iter().next().unwrap());
+        let mut matches = rule.validate("a", &rules);
+        assert_eq!("", matches.next().unwrap());
     }
 
     #[test]
